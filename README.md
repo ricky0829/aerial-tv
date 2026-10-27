@@ -33,6 +33,27 @@
 
 不用 root，不动系统应用。电脑和盒子连同一个网络。
 
+**让 Agent 装（推荐）**：把下面这段发给能在电脑上运行命令的 Agent（WorkBuddy、豆包电脑版、千问电脑版、Trae、Claude Code、Codex 等）：
+
+```text
+请帮我把开源电视桌面 Aerial 的当贝优化版装到我的盒子上，并设为开机进入的桌面。
+盒子 IP：<盒子IP>
+保持 ADB 常开：要
+
+安装说明在这里：https://raw.githubusercontent.com/ricky0829/aerial-tv/main/site/agent.md
+
+请先完整读完安装说明再动手，然后在我的电脑上亲自运行命令，不要只把步骤告诉我。需要我在盒子上操作时提醒我。
+装之前会先卸载官方版，Aerial 里已有的壁纸、布局等设置会被清空，这个可以接受。
+最后按说明里的「验收」，把这几条命令的原始输出原样贴给我：
+- adb shell "dumpsys package app.orchard.tv | grep versionName"
+- adb shell settings get secure enabled_accessibility_services
+- 按主页键后的 adb shell "dumpsys window | grep mCurrentFocus"
+```
+
+手机上的豆包、网页版聊天只会把步骤告诉你，不会执行；要用能跑命令的电脑版。
+
+**手动（备用）**：照下面的步骤逐条运行。
+
 ### 1. 打开 ADB 调试
 
 在盒子的 设置 → 关于（或「系统信息」）里连续按「版本号」，进入开发者选项后打开「USB 调试 / ADB 调试」。盒子的 IP 在 设置 → 网络 → 已连接的网络 里。第一次连接时盒子上会问是否允许调试，选「始终允许」。
@@ -47,11 +68,11 @@ adb devices
 ### 3. 卸载官方版，装本版本
 
 ```powershell
-adb uninstall app.orchard.tv
+adb shell pm uninstall app.orchard.tv
 adb install -r aerial-standard-dangbei.apk
 ```
 
-输出 `Success` 继续。
+输出 `Success` 继续。`pm uninstall` 报 `not installed` 是本来就没装，正常。
 
 ### 4. 授予只有 adb 能给的权限
 
@@ -163,7 +184,7 @@ APK 在 `app/build/outputs/apk/standard/release/`。签名配置放 `local/signi
 
 ## 说明
 
-- 只改了主页键相关的两处逻辑，其余代码与上游一致；预编译 APK 是在官方 1.57 的 APK 上应用同样两处改动后重新签名的。
+- 只改了主页键相关的两处逻辑，其余代码与上游一致；Release 里的 APK 由本仓库源码（1.58）构建，用自签名。
 - 主页键被接管后，长按主页键不再触发系统原来的行为。
 - 开机时系统仍会先拉起自己的桌面，再由守护切到 Aerial。
 
