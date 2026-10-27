@@ -26,7 +26,7 @@
 
 ## 还原
 
-参考[原项目的安装 / 还原说明](https://aerial.qust.me/agent.md)，其中的「还原」一节有逐步卸载的命令。
+参考[本仓库安装说明的「还原」一节](https://github.com/ricky0829/aerial-tv/blob/dangbei/site/agent.md#还原)，其中有逐步卸载并恢复系统设置的命令。
 
 
 ## 手动构建
@@ -64,7 +64,7 @@ if (dangbei && event.keyCode == KeyEvent.KEYCODE_HOME) {
 }
 
 三、编译、装机、验收
-1. 装之前记录当前版本。构建出的包通常和已装版本的签名不同，`adb install -r` 会报签名不一致，此时按 README 的安装步骤先卸载再装（会清空 Aerial 内的壁纸、布局等设置）。
+1. 装之前记录当前版本。构建出的包通常和已装版本的签名不同，`adb install -r` 会报签名不一致，此时按 https://raw.githubusercontent.com/ricky0829/aerial-tv/dangbei/site/agent.md 的安装步骤先卸载再装（会清空 Aerial 内的壁纸、布局等设置）。
 2. 必须用实体遥控器验收（adb shell input keyevent 是注入按键，不经过无障碍过滤，测不出来）：
    - 按主页键回到 Aerial，不黑屏、不闪系统桌面
    - 长按主页键不弹最近任务
