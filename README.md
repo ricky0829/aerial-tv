@@ -1,30 +1,12 @@
-<div align="center">
+## 分支说明
 
-<img src="docs/brand/icon.png" width="96" alt="Aerial 图标">
-
-# Aerial · 当贝盒子版
-
-**给当贝盒子的一块干净桌面**
-
-本仓库是 [pengchujin/aerial-tv](https://github.com/pengchujin/aerial-tv) 的 Fork，只针对当贝盒子进行兼容（原项目在当贝盒子上会出现接管缓慢、按主页键回到原系统桌面等问题），其余功能和用法与官方版完全一样。功能、截图和常见问题看[原项目](https://github.com/pengchujin/aerial-tv)或[官网](https://aerial.qust.me)。
-
-<img alt="Android TV 5.0+" src="https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white">
-<a href="LICENSE"><img alt="许可证 MIT" src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-555555?style=flat-square"></a>
-
-</div>
-
-## 重要提示
-
-1. 本分支发布的 APK 与原版签名不同，无法覆盖安装，若已经安装原版，必须先卸载（相关指令已包含在 agent 提示词中，无需手动卸载）。
-2. **本分支修复了原项目闪现系统桌面、接管缓慢、黑屏、弹出最近任务、冷启动卡在开机画面等问题。** 当贝盒子硬编码了桌面白名单，非白名单包名均无法接管主页键。本分支解决了此问题。
-3. **从应用按主页键一律回到首页。** 原项目的逻辑为按下主页键，回到上次主页停留的那一页，需要再按一次主页才回到首页。本分支直接回到首页。若不喜欢此改动，可参考手动构建章节，并告诉 agent 跳过其中的第三步（MainActivity 的改动）。
-4. 本分支的补丁只兼容当贝盒子，即 `ro.product.brand` 为 `Dangbei`。
+1. 仅兼容当贝盒子，其他电视、盒子、投影请移步原项目。
+2. 【核心修复】修复了原项目在当贝盒子上闪现系统桌面、接管缓慢、黑屏、弹出最近任务、卡在开机画面等问题。
+3. 【定制体验】针对当贝盒子进行深度优化修改，移除了亮度、输入源等模块，修改了部分 UI 交互行为，并增加内存清理、前台 app 优化模块，全力保障前台 app 流畅运行。
 
 ## 使用说明
 
-以下两种方式二选一即可，**强烈建议让 Agent 装**，可以帮你解决过程中意想不到的问题，并自带验收。
-
-**让 Agent 装（推荐）**：确保电脑和盒子连同一个网络，把下面这段发给能在电脑上运行命令的 Agent（WorkBuddy、豆包电脑版、千问电脑版、Trae、Claude Code、Codex 等）：
+确保电脑和盒子连同一个网络，把下面这段发给能在电脑上运行命令的 Agent（WorkBuddy、豆包电脑版、千问电脑版、Trae、Claude Code、Codex 等）：
 
 ```text
 请帮我把开源电视桌面 Aerial 的当贝优化版装到我的盒子上，并设为开机进入的桌面。
@@ -42,42 +24,6 @@
 ```
 
 
-**手动 ADB 安装**：
-
-注意事项：
-1. 从 [Release](https://github.com/ricky0829/aerial-tv/releases/latest) 下载最新的 `aerial-standard-dangbei.apk`
-2. 原来的值是 `null` 或空时，只写 `app.orchard.tv/app.orchard.tv.guard.HomeGuardService`；原来的值里已经有这一项时不要重复添加
-3. 部分命令报错可忽略，安装完成后按下主页键可以回到 Aerial 且无闪屏、黑屏即可
-
-```powershell
-adb connect <盒子IP>:5555
-adb devices
-adb shell pm uninstall app.orchard.tv
-adb install -r aerial-standard-dangbei.apk
-adb shell pm grant app.orchard.tv android.permission.ACCESS_FINE_LOCATION
-adb shell pm grant app.orchard.tv android.permission.WRITE_SECURE_SETTINGS
-adb shell appops set app.orchard.tv SYSTEM_ALERT_WINDOW allow
-adb shell appops set app.orchard.tv WRITE_SETTINGS allow
-adb shell appops set app.orchard.tv REQUEST_INSTALL_PACKAGES allow
-adb shell appops set app.orchard.tv GET_USAGE_STATS allow
-adb shell appops set app.orchard.tv android:get_usage_stats allow
-adb shell cmd notification allow_listener app.orchard.tv/app.orchard.tv.guard.RevivalListener
-adb shell appops set app.orchard.tv APP_AUTO_START allow
-adb shell appops set app.orchard.tv APP_ASSOC_START allow
-adb shell am start -W -n app.orchard.tv/.MainActivity
-adb shell cmd package compile -m speed -f app.orchard.tv
-adb shell settings get secure screensaver_enabled
-adb shell settings put secure screensaver_components app.orchard.tv/app.orchard.tv.dream.AerialDream
-adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigReceiver --ez own_screensaver true
-adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigReceiver --ez keep_adb true
-adb shell cmd role add-role-holder --user 0 android.app.role.HOME app.orchard.tv
-adb shell cmd package set-home-activity --user 0 app.orchard.tv/.MainActivity
-adb shell settings get secure enabled_accessibility_services
-adb shell "settings put secure enabled_accessibility_services '<原来的值>:app.orchard.tv/app.orchard.tv.guard.HomeGuardService'"
-adb shell settings put secure accessibility_enabled 1
-```
-
-
 ## 还原
 
 参考[原项目的安装 / 还原说明](https://aerial.qust.me/agent.md)，其中的「还原」一节有逐步卸载的命令。
@@ -85,7 +31,7 @@ adb shell settings put secure accessibility_enabled 1
 
 ## 手动构建
 
-若上游发新版后，本分支未及时跟进发版，可以把下面这段丢给能在电脑上执行命令的 Agent 构建新版。
+下述提示词可供 agent 进行【核心修复】的构建，适用于想要追原项目新版的场景。亦可把下列提示词加入原版提示词中，一个对话解决构建和安装。
 
 ```text
 请把当贝补丁移植到 Aerial 官方最新发布版，编译并安装到我的盒子。盒子 IP：<盒子IP>
@@ -117,21 +63,14 @@ if (dangbei && event.keyCode == KeyEvent.KEYCODE_HOME) {
     return true
 }
 
-三、改 app/src/main/java/app/orchard/tv/MainActivity.kt
-
-1) onNewIntent() 里 if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.action == Intent.ACTION_MAIN)
-   这个分支的方法体改成 vm.onHomePressed()（从应用回来也回首页）。
-2) 删掉字段 openedAppSinceHome 以及它的全部赋值（openBootSource、resumeWork、launch 三处）和只为它服务的判断。
-
-四、编译、装机、验收
+三、编译、装机、验收
 1. 装之前记录当前版本。构建出的包通常和已装版本的签名不同，`adb install -r` 会报签名不一致，此时按 README 的安装步骤先卸载再装（会清空 Aerial 内的壁纸、布局等设置）。
 2. 必须用实体遥控器验收（adb shell input keyevent 是注入按键，不经过无障碍过滤，测不出来）：
    - 按主页键回到 Aerial，不黑屏、不闪系统桌面
    - 长按主页键不弹最近任务
-   - 在抽屉里打开应用，按一次主页键直接回首页第一个图标
+   - adb reboot 重启后不卡在开机界面
 3. adb shell "dumpsys activity exit-info app.orchard.tv" 里，装机后不应再出现新的 USER REQUESTED 记录。
 
-补充：改动只有两处，代码位置固定在 `updateKeyFilter()`、`onKeyEvent()` 和 `onNewIntent()`。上游如果重构了这几个函数，按语义移植即可：当贝上 HOME 一律吃掉（长按同理），第一次按下拉起 Aerial；按键过滤在当贝上不受 `isDefaultHome()` 影响，只在息屏时不拦截。
 ```
 
 
