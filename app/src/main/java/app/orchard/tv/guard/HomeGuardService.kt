@@ -65,6 +65,14 @@ class HomeGuardService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
 
+    /**
+     * Dangbei boxes answer Home themselves: the firmware starts its own FallbackHome (a black
+     * screen) and force-stops Aerial, then starts it again, so the screen ends up black. Aerial is
+     * not the resolved Home there and the firmware keeps Home for itself, so the key is taken here
+     * for good: see updateKeyFilter and onKeyEvent.
+     */
+    private val dangbei = Build.BRAND.equals("Dangbei", ignoreCase = true)
+
     /** When the screen last lit, for take-overs that are really a wake (issue #111). */
     private var screenOnAt = Long.MIN_VALUE / 2
 
@@ -502,10 +510,12 @@ class HomeGuardService : AccessibilityService() {
         // Dangbei boxes (Aerial cannot be made the default Home on them): Home in another app still
         // has to be taken here, or the firmware starts its own launcher first and shows it for a
         // second or two before the guard brings Aerial back.
-        val dangbei = Build.BRAND.equals("Dangbei", ignoreCase = true)
-        val wanted = !keysPassThrough && !screenOff &&
-            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront || dangbei)
-        val homeWanted = wanted && !isDefaultHome()
+        val wanted = !screenOff &&
+            (dangbei || (!keysPassThrough && (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)))
+        // Dangbei: whatever Home resolution says there (the firmware hands it to its own FallbackHome
+        // even though Aerial declares the category), the key must stay here, or the system answers it
+        // by force-stopping Aerial and leaving the black FallbackHome in front.
+        val homeWanted = wanted && (dangbei || !isDefaultHome())
         val cecWanted = !screenOff && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
         val want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
@@ -527,6 +537,18 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (!GuardSetup.isUserUnlocked(this)) return false
+        // Dangbei: Home is taken whatever the key does next. Letting it reach the system costs a
+        // black screen: the firmware starts FallbackHome and force-stops Aerial (logcat:
+        // PhoneWindowManager.handleDoubleTapOnHome / handleLongPressOnHome, then
+        // exit reason USER REQUESTED "stop app.orchard.tv"), then starts Aerial again into the
+        // black screen. Held, it means the same as pressed: no task centre.
+        if (dangbei && event.keyCode == KeyEvent.KEYCODE_HOME) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                Log.i(TAG, "Home taken on Dangbei before the system saw it")
+                goHome()
+            }
+            return true
+        }
         if (event.keyCode in VOLUME_KEYS) return if (filteringForCecOnly) false else takeVolumeKey(event)
         // Any key that is done: whatever it did to the volume (Control Center's slider) is in.
         if (event.action == KeyEvent.ACTION_UP) volumeSeen = volumeNow()
