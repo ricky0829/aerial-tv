@@ -40,7 +40,7 @@
 盒子 IP：<盒子IP>
 保持 ADB 常开：要
 
-安装说明在这里：https://raw.githubusercontent.com/ricky0829/aerial-tv/main/site/agent.md
+安装说明在这里：https://raw.githubusercontent.com/ricky0829/aerial-tv/dangbei/site/agent.md
 
 请先完整读完安装说明再动手，然后在我的电脑上亲自运行命令，不要只把步骤告诉我。需要我在盒子上操作时提醒我。
 装之前会先卸载官方版，Aerial 里已有的壁纸、布局等设置会被清空，这个可以接受。
