@@ -542,9 +542,9 @@ class HomeGuardService : AccessibilityService() {
         // places a press again (云视听极光 on MiTV-MFTR0, Android 14; issue #475).
         // Not on Xiaomi, which answers Home in Aerial another way: see backOnPause.
         val aerialInFront = aerialResumed && !backOnPause
-        // Dangbei boxes (Emotn UI is the firmware Home; Aerial cannot be made the default Home on
-        // them): Home in another app still has to be taken here, or the firmware starts Emotn first
-        // and shows it for a second or two before the guard brings Aerial back.
+        // Dangbei boxes (Aerial cannot be made the default Home on them): Home in another app still
+        // has to be taken here, or the firmware starts its own launcher first and shows it for a
+        // second or two before the guard brings Aerial back.
         val dangbei = Build.BRAND.equals("Dangbei", ignoreCase = true)
         val wanted = !keysPassThrough && !screenOff &&
             (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront || dangbei)
