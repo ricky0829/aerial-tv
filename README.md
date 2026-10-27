@@ -182,6 +182,59 @@ JDK 17 + Android SDK 36，在仓库根目录：
 
 APK 在 `app/build/outputs/apk/standard/release/`。签名配置放 `local/signing.properties`（格式见 `docs/HANDOFF.md`），没有时用本机的调试密钥，只能全新安装、不能覆盖已装的版本。
 
+## 跟进上游新版（给 Agent）
+
+上游发新版后不用等我改。把下面这段（填上盒子 IP）丢给能在电脑上执行命令的 Agent，它会取新 tag 的源码、把两处改动移植上去、编译、装机并用遥控器验收。
+
+```text
+请把当贝补丁移植到 Aerial 官方最新发布版，编译并安装到我的盒子。盒子 IP：<盒子IP>
+
+一、取源码
+- 仓库 https://github.com/pengchujin/aerial-tv ，用最新 Release 对应的 tag（不要用 main 分支）。
+- 环境 JDK 17 + Android SDK 36，构建命令 ./gradlew assembleStandardRelease
+- 产物：app/build/outputs/apk/standard/release/app-standard-release.apk
+
+二、改 app/src/main/java/app/orchard/tv/guard/HomeGuardService.kt
+
+1) 类里加一个属性（放在 private val handler 附近，需要时补 import android.os.Build）：
+
+private val dangbei = Build.BRAND.equals("Dangbei", ignoreCase = true)
+
+2) updateKeyFilter() 里，把计算 wanted 和 homeWanted 的两行改成：
+
+val wanted = !screenOff &&
+    (dangbei || (!keysPassThrough && (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront)))
+val homeWanted = wanted && (dangbei || !isDefaultHome())
+
+3) onKeyEvent() 开头，紧跟在 if (!GuardSetup.isUserUnlocked(this)) return false 之后插入：
+
+if (dangbei && event.keyCode == KeyEvent.KEYCODE_HOME) {
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+        Log.i(TAG, "Home taken on Dangbei before the system saw it")
+        goHome()
+    }
+    return true
+}
+
+三、改 app/src/main/java/app/orchard/tv/MainActivity.kt
+
+1) onNewIntent() 里 if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.action == Intent.ACTION_MAIN)
+   这个分支的方法体改成 vm.onHomePressed()（从应用回来也回首页）。
+2) 删掉字段 openedAppSinceHome 以及它的全部赋值（openBootSource、resumeWork、launch 三处）和只为它服务的判断。
+
+四、编译、装机、验收
+1. 装之前记录当前版本，安装用 adb install -r；装不上时再按 README 的安装步骤处理。
+2. 必须用实体遥控器验收（adb shell input keyevent 是注入按键，不经过无障碍过滤，测不出来）：
+   - 按主页键回到 Aerial，不黑屏、不闪系统桌面
+   - 长按主页键不弹最近任务
+   - 在抽屉里打开应用，按一次主页键直接回首页第一个图标
+3. adb shell "dumpsys activity exit-info app.orchard.tv" 里，装机后不应再出现新的 USER REQUESTED 记录。
+
+做完把 README 和 Release 说明里的版本号（v1.57）改成新版本，并按仓库现有风格提交。
+```
+
+只有两处改动，位置固定在 `updateKeyFilter()`、`onKeyEvent()` 和 `onNewIntent()`。上游如果重构了这几个函数，按语义移植即可：当贝上 HOME 一律吃掉（长按同理），第一次按下拉起 Aerial；按键过滤在当贝上不受 `isDefaultHome()` 影响，只在息屏时不拦截。
+
 ## 说明
 
 - 只改了主页键相关的两处逻辑，其余代码与上游 **v1.57** 发布版一致；Release 里的 APK 由本仓库源码构建（官方 v1.57 + 这两处改动），用自签名。
