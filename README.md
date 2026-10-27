@@ -27,6 +27,39 @@
 
 </div>
 
+## 当贝盒子优化版（Fork）
+
+本 Fork 基于官方 Aerial（1.58）代码，只针对**当贝盒子**（`ro.product.brand` 为 `Dangbei`，例如 DBBOXH3 / RK356x，Android 11，系统桌面是 Emotn UI）做了两处改动，其余功能和安装方式与官方一致。上游项目：[pengchujin/aerial-tv](https://github.com/pengchujin/aerial-tv)。
+
+### 改动
+
+- **按主页键直接回到 Aerial，不再先闪系统桌面。** 当贝把主页键交给系统处理：先拉起默认桌面 Emotn UI，Aerial 的守护要等一两秒才把它抢回来。本版本在当贝设备上常开无障碍按键过滤，由 Aerial 自己接管主页键，在任何应用里按主页都直接回到 Aerial，Emotn 不会再出现。
+- **从应用按主页键一律回到首页。** 官方版会回到上次停留的那一页（要再按一次主页才回首页）；本版本直接回到首页的第一个图标。
+
+### 使用方法
+
+安装步骤与官方完全相同（见下方「安装」，Windows 用 [agent.md](https://aerial.qust.me/agent.md) 里的逐条命令），只有两点不同：
+
+1. 本版本是自签名构建，签名与官方 APK 不同，**不能覆盖安装**，需要先卸载官方版再装：
+
+   ```powershell
+   adb uninstall app.orchard.tv
+   adb install <本 Fork 构建出的 APK>
+   ```
+
+   卸载会清空 Aerial 内的个性化设置（壁纸、布局等），装好后重新设置一次。
+
+2. 装好后按官方说明第 3～5 步重新授权（`pm grant` / `appops` / 通知使用权），再设置屏保和「保持 ADB 常开」。
+
+自己构建：JDK 17 + Android SDK 36，`./gradlew assembleStandardRelease`，APK 在 `app/build/outputs/apk/standard/release/`。签名密钥放在 `local/signing.properties`（格式见 `docs/HANDOFF.md`），没有时用本机的调试密钥，只能全新安装、不能覆盖已装的官方版。
+
+### 说明
+
+- 只在 `Build.BRAND == "Dangbei"` 时改动主页键行为，其它电视与官方版一致。
+- 主页键被接管后，长按主页键不再触发系统原来的行为。
+- `adb shell input keyevent KEYCODE_HOME` 是注入按键，不经过无障碍按键过滤，不能用它验证本改动，请用实体遥控器。
+- 开机时系统仍会先拉起默认桌面，再由守护切到 Aerial。
+
 ## 功能
 
 <p align="center">
