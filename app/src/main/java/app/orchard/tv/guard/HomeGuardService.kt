@@ -873,6 +873,18 @@ class HomeGuardService : AccessibilityService() {
         stockHomes = (stockHomes.keys + unfiltered.keys).associateWith {
             stockHomes[it].orEmpty() + unfiltered[it].orEmpty()
         }
+        // Dangbei: Home resolves to the firmware's own FallbackHome, a black activity with priority
+        // -1000, and never to Aerial. Dropping negative priorities above therefore left the guard
+        // with no stock home at all: on a cold boot it kept away from the black screen, Aerial was
+        // never started (BOOT_COMPLETED only comes after the boot animation, which the firmware
+        // ends only when a real window draws), and the box sat on the boot animation for good.
+        if (dangbei) {
+            val fallbacks = (standard + vendor)
+                .filter { it.activityInfo.name.endsWith(".FallbackHome") }
+                .groupBy({ it.activityInfo.packageName }, { it.activityInfo.name })
+                .mapValues { it.value.toSet() }
+            if (fallbacks.isNotEmpty()) stockHomes = stockHomes + fallbacks
+        }
     }
 
     /** Android's own SECONDARY_HOME is for other displays, and comes with CATEGORY_HOME anyway. */
