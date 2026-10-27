@@ -138,6 +138,9 @@ private val glyphImages = object : LruCache<Triple<String?, Int, Int>, ImageBitm
     override fun sizeOf(key: Triple<String?, Int, Int>, value: ImageBitmap) = value.width * value.height * 4
 }
 
+/** Drops the rendered glyph pictures; Control Center's memory cleanup calls this. */
+fun clearGlyphCache() = glyphImages.evictAll()
+
 // Tiles are drawn off the main thread while the UI draws glyphs on it.
 private val parsed = java.util.concurrent.ConcurrentHashMap<String, Path>()
 private val switches = java.util.concurrent.ConcurrentHashMap<Float, Path>()

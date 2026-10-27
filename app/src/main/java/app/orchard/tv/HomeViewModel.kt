@@ -17,30 +17,22 @@ import app.orchard.tv.apps.AppNames
 import app.orchard.tv.apps.LayoutOps
 import app.orchard.tv.apps.CustomIcons
 import app.orchard.tv.apps.IconLibrary
-import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.apps.FOLDER_KEY_PREFIX
-import app.orchard.tv.apps.SOURCE_KEY_PREFIX
 import app.orchard.tv.apps.LayoutStore
 import app.orchard.tv.apps.TileArt
 import app.orchard.tv.apps.TileArtFactory
 import app.orchard.tv.apps.folderEntry
-import app.orchard.tv.apps.sourceEntry
 import app.orchard.tv.settings.AerialSettings
-import app.orchard.tv.system.Brightness
 import app.orchard.tv.system.DiagLog
 import app.orchard.tv.system.HomeStatus
 import app.orchard.tv.system.NetworkStatus
-import app.orchard.tv.system.SourceKind
 import app.orchard.tv.system.SystemProbe
-import app.orchard.tv.system.TvSource
-import app.orchard.tv.system.VolumeStatus
 import app.orchard.tv.ui.home.PinMode
 import app.orchard.tv.ui.home.ScreensaverSkips
 import app.orchard.tv.ui.home.TileFaces
 import app.orchard.tv.ui.theme.canvasDensity
 import app.orchard.tv.wallpaper.Wallpapers
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
@@ -58,7 +50,7 @@ sealed interface Overlay {
     data class Pin(val mode: PinMode, val onDone: () -> Unit) : Overlay
 }
 
-enum class CcPage { Main, Inputs, InputSettings, Update, Setup }
+enum class CcPage { Main, Boot, Memory, Update, Setup }
 
 /**
  * Tiles a cold start reads whole before showing Home (two rows and a half, as many as can show);
@@ -88,12 +80,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     var movingKey by mutableStateOf<String?>(null); private set
 
     var network by mutableStateOf(NetworkStatus()); private set
-    var volume by mutableStateOf(VolumeStatus()); private set
-    var sources by mutableStateOf<List<TvSource>>(emptyList()); private set
     var homeStatus by mutableStateOf(HomeStatus.NotDefault); private set
-
-    /** Panel brightness 0..1, or null when Aerial cannot change it on this TV. */
-    var brightness by mutableStateOf<Float?>(null); private set
 
     /**
      * Set when Home is pressed: go back to the top row. Done once the window has focus again,
@@ -127,7 +114,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         AppCatalog.renameFolder = ::renameFolder
-        AppCatalog.pinSource = ::pinSourceById
         AppCatalog.layout = layoutOps
         reload()
         // A tile picture set or removed from the phone page.
@@ -135,8 +121,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         // Library pictures that arrived, or the library turned on or off.
         viewModelScope.launch { snapshotFlow { IconLibrary.version }.drop(1).collect { reload() } }
         offerSetupOnce()
-        // An input's device or name, chosen from its tile's menu or the phone page.
-        viewModelScope.launch { snapshotFlow { SourceLooks.all }.drop(1).collect { if (loaded) arrange() } }
         // An app renamed on the phone page.
         viewModelScope.launch { snapshotFlow { AppNames.all }.drop(1).collect { if (loaded) arrange() } }
     }
@@ -182,9 +166,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             val ctx = context
             val started = SystemClock.uptimeMillis()
-            // The inputs are probed while the apps load: one after the other, a cold start waited
-            // for both in turn (0.1-0.8 s more on the TVs in issues #452, #454, #537).
-            val probing = async(Dispatchers.Default) { SystemProbe.sources(ctx) }
             // A cold start reads only the first rows' tiles whole; the rest follow just after.
             val first: ((Set<String>) -> Set<String>)? = if (loaded) null else { installed -> store.leading(LEADING_TILES, installed) }
             all = AppCatalog.load(ctx, first)
@@ -194,12 +175,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val now = SystemClock.uptimeMillis()
             DiagLog.i("${all.size} apps in ${now - started} ms (wait ${from - started}, queries ${queried - from}, " +
                 "tiles ${done - queried}, main ${now - done})")
-            sources = probing.await()
             arrange()
             prepareFaces()
             val wasLoaded = loaded
             if (!wasLoaded) {
-                DiagLog.i("Home loaded: ${apps.size} tiles, ${sources.size} inputs, ${SystemClock.uptimeMillis() - started} ms")
+                DiagLog.i("Home loaded: ${apps.size} tiles, ${SystemClock.uptimeMillis() - started} ms")
                 catchUpAfterBoot()
             }
             loaded = true
@@ -277,19 +257,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun arrange() {
-        // Pinned TV inputs share the grid, order and hiding with the apps.
-        val pinned = sources.filter { it.id in AerialSettings.pinnedSources }.map { sourceEntry(context, it) }
-        AppCatalog.pinnedSources = pinned
-        AppCatalog.sources = sources
-        // The inputs Android itself lists can play behind Home through a TvView; the ones Aerial
-        // makes up for TCL, Skyworth and the like open only in the maker's own player.
-        Wallpapers.setSources(
-            sources.filter { (it.kind == SourceKind.Hdmi || it.kind == SourceKind.DisplayPort) && '/' in it.id }
-                .map { it.id to (it.deviceName?.let { d -> "${it.label} · $d" } ?: it.label) },
-        )
+        // The box has no TV inputs: no source tiles, and no input pictures behind Home.
+        AppCatalog.pinnedSources = emptyList()
+        AppCatalog.sources = emptyList()
+        Wallpapers.setSources(emptyList())
         // Names typed on the phone page stand in for the apps' own, everywhere Home shows one.
         val named = all.map { e -> AppNames.of(e.key)?.let { e.copy(label = it) } ?: e }
-        val arrangement = store.arrange(named + pinned) { folder, inside ->
+        val arrangement = store.arrange(named) { folder, inside ->
             val shown = inside.take(9).map { it.art }
             val art = folderArt[folder.id]?.takeIf { (made, _) -> made.size == shown.size && made.indices.all { made[it] === shown[it] } }?.second
                 ?: TileArtFactory.forFolder(shown).also { folderArt[folder.id] = shown to it }
@@ -365,18 +339,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     /** What the TV opens when switched on, named as Home names it; null for nothing. */
     fun bootTargetLabel(): String? {
-        AerialSettings.bootApp?.let { pkg -> return entry(pkg)?.label ?: hiddenApps.firstOrNull { it.key == pkg }?.label ?: pkg }
-        val id = AerialSettings.bootSource ?: return null
-        return entry(SOURCE_KEY_PREFIX + id)?.label ?: sources.firstOrNull { it.id == id }?.label
+        val pkg = AerialSettings.bootApp ?: return null
+        return entry(pkg)?.label ?: hiddenApps.firstOrNull { it.key == pkg }?.label ?: pkg
     }
 
     /**
-     * Opens [pkg] or the input [sourceId] when the TV is switched on, or nothing with both null,
-     * and says so: the choice is made in a menu, and what it replaced is otherwise gone unseen.
+     * Opens [pkg] when the TV is switched on, or nothing with null, and says so: the choice is
+     * made in a menu, and what it replaced is otherwise gone unseen.
      */
-    fun chooseBootTarget(pkg: String? = null, sourceId: String? = null) {
+    fun chooseBootTarget(pkg: String? = null) {
         val before = bootTargetLabel()
-        if (pkg != null) AerialSettings.chooseBootApp(pkg) else AerialSettings.chooseBootSource(sourceId)
+        AerialSettings.chooseBootApp(pkg)
         val after = bootTargetLabel()
         when {
             after == null -> before?.let { notify(context.getString(R.string.notice_boot_off, it)) }
@@ -385,95 +358,23 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The phone page pins by input id. */
-    private fun pinSourceById(id: String, pinned: Boolean) {
-        sources.firstOrNull { it.id == id }?.let { setSourcePinned(it, pinned) }
-    }
-
-    /** Pins a TV input to Home (as the first tile, where it is easiest to reach) or takes it off. */
-    fun setSourcePinned(source: TvSource, pinned: Boolean) {
-        AerialSettings.setPinned(source.id, pinned)
-        arrange()
-        if (pinned) {
-            val key = apps.firstOrNull { it.source?.id == source.id }?.key
-            val first = apps.firstOrNull()?.key
-            if (key != null && first != null && key != first) {
-                store.move(key, first)
-                arrange()
-            }
-        }
-    }
-
+    /** The box has neither a volume nor a brightness module: only the network and Home status. */
     fun refreshSystem() {
         viewModelScope.launch {
             val ctx = context
-            // Brightness off the main thread too: on MiTV without picture_backlight its first read
-            // probes the panel over binder (MitvPanel.usable).
-            val (n, v, s) = withContext(Dispatchers.Default) {
-                Triple(SystemProbe.network(ctx), SystemProbe.volume(ctx), SystemProbe.sources(ctx))
-            }
-            val level = withContext(Dispatchers.Default) { Brightness.level(ctx) }
-            network = n; volume = v
-            // TvSource holds an Intent, which has no value equality; compare what a tile shows.
-            // The route too: a corrected Xiaomi source id changes nothing a tile shows.
-            fun shown(list: List<TvSource>) = list.map { listOf(it.id, it.label, it.deviceName, it.intent.toUri(0)) }
-            if (shown(s) != shown(sources)) { sources = s; arrange() } else sources = s
+            network = withContext(Dispatchers.Default) { SystemProbe.network(ctx) }
             homeStatus = SystemProbe.homeStatus(ctx)
-            brightness = level
-        }
-    }
-
-    /**
-     * What Control Center shows that changes while it is open with nothing to tell us: whether Home
-     * Guard is bound (it binds a few seconds after Aerial starts, and the panel kept showing "not the
-     * default home screen" until it was opened again) and the brightness, if something else sets it.
-     * The volume and the network have broadcasts of their own (refreshSystem, refreshNetwork), and the
-     * input list is not rebuilt here. Assigning equal values redraws nothing.
-     */
-    /**
-     * Inputs again, for the inputs page while it lists none. Skyworth skyT963 (1AA46_V58FP,
-     * Android 9) fills its source list some 30 s after boot, after Aerial has loaded and while it
-     * stays in front, so nothing re-probed it (PR #507, by Sakurasan, checked on that TV).
-     */
-    fun refreshSources() {
-        viewModelScope.launch {
-            val ctx = context
-            val s = withContext(Dispatchers.Default) { SystemProbe.sources(ctx) }
-            if (s.isNotEmpty() && sources.isEmpty()) { sources = s; arrange() }
         }
     }
 
     fun refreshPanel() {
         viewModelScope.launch {
             val ctx = context
-            val (home, level) = withContext(Dispatchers.Default) { SystemProbe.homeStatus(ctx) to Brightness.level(ctx) }
-            homeStatus = home
-            brightness = level
+            homeStatus = withContext(Dispatchers.Default) { SystemProbe.homeStatus(ctx) }
         }
     }
 
     fun refreshNetwork() { network = SystemProbe.network(context) }
-
-    /**
-     * For the volume broadcast, one per step. It used to run refreshSystem, which read the level,
-     * then the inputs and brightness, and only then showed that level: holding a key on the slider,
-     * the steps outran those reads, and it jumped back to older levels (issue #445).
-     */
-    fun refreshVolume() { volume = SystemProbe.volume(context) }
-
-    fun adjustVolume(direction: Int) {
-        SystemProbe.adjustVolume(context, direction)
-        volume = SystemProbe.volume(context)
-    }
-
-    fun adjustBrightness(direction: Int) {
-        brightness = Brightness.adjust(context, direction)
-    }
-
-    fun toggleMute() {
-        SystemProbe.toggleMute(context)
-        volume = SystemProbe.volume(context)
-    }
 
     /** Runs [action] at once, or after the parental PIN when one is set (issue #10). */
     fun whenUnlocked(action: () -> Unit) {
@@ -523,7 +424,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         if (AppCatalog.renameFolder == ::renameFolder) AppCatalog.renameFolder = null
-        if (AppCatalog.pinSource == ::pinSourceById) AppCatalog.pinSource = null
         if (AppCatalog.layout === layoutOps) AppCatalog.layout = null
     }
 }

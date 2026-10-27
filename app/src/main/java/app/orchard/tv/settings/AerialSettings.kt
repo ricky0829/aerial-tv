@@ -123,6 +123,13 @@ object AerialSettings {
     var backStartsScreensaver by mutableStateOf(true); private set
 
     /**
+     * Leaving Home for an app ends the other apps' background processes five seconds later, so the
+     * app gets the RAM (DBBoxH3: only one app is on screen at a time). Off leaves them running, and
+     * switching back to the previous app stays instant.
+     */
+    var trimBackground by mutableStateOf(true); private set
+
+    /**
      * Parental PIN (issue #10): asked before TV settings open and before hidden apps come back.
      * Kept as a SHA-256 hash. One right entry holds for a while, until Home is pressed.
      */
@@ -188,6 +195,7 @@ object AerialSettings {
             else -> UiSounds.Aerial
         }
         backStartsScreensaver = prefs.getBoolean("back_starts_screensaver", true)
+        trimBackground = prefs.getBoolean("trim_background", true)
         screensaverMinutes = prefs.getInt("screensaver_minutes", DEFAULT_SCREENSAVER_MINUTES)
         aerialQuality = AerialQuality.of(prefs.getString("aerial_quality", null))
         effects = Effects.of(prefs.getString("effects", null))
@@ -284,6 +292,11 @@ object AerialSettings {
     fun chooseBackStartsScreensaver(on: Boolean) {
         backStartsScreensaver = on
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("back_starts_screensaver", on) }
+    }
+
+    fun chooseTrimBackground(on: Boolean) {
+        trimBackground = on
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("trim_background", on) }
     }
 
     fun chooseAerialQuality(quality: AerialQuality) {

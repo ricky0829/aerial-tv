@@ -1,6 +1,6 @@
 # Aerial 架构
 
-Android 应用（`app/`），Kotlin + Jetpack Compose（没有用 androidx.tv 和 Material，全部自绘）。包名 `app.orchard.tv`（产品名是 Aerial，包名沿用旧名 Orchard：改包名会让电视把它当成新 App，丢掉户主数据和全部授权），minSdk 21（Android 5.0），targetSdk 34，compileSdk 36。Compose 固定在 1.9.x（BOM 2025.11.01）：1.10 起要求 Android 6.0。比 Android 5.0 新的接口都要按 `Build.VERSION.SDK_INT` 判断，`./gradlew lintStandardRelease` 的 NewApi 检查能找出漏掉的地方。Android 4.0–4.4 的电视用另一个模块 `lite/`（Aerial Lite，原生 View，minSdk 14），见 `docs/LITE.md`。
+Android 应用（`app/`），Kotlin + Jetpack Compose（没有用 androidx.tv 和 Material，全部自绘）。包名 `app.orchard.tv`（产品名是 Aerial，包名沿用旧名 Orchard：改包名会让电视把它当成新 App，丢掉户主数据和全部授权），minSdk 21（Android 5.0），targetSdk 34，compileSdk 36。Compose 固定在 1.9.x（BOM 2025.11.01）：1.10 起要求 Android 6.0。比 Android 5.0 新的接口都要按 `Build.VERSION.SDK_INT` 判断，`./gradlew lintStandardRelease` 的 NewApi 检查能找出漏掉的地方。
 
 ## 目录一览
 
@@ -192,7 +192,7 @@ NanoHTTPD 监听 8790 端口，路径前缀是 8 位随机令牌（每次打开�
 
 ## 机型修正（system/DeviceProfile.kt）
 
-框架看不出来、只能按机型写的修正，以数据形式放在 `assets/devices.json`：按 `ro.product.model` 匹配，第一条命中的生效，`buildMajorBelow` 限定 `Build.DISPLAY` 第一个数字低于它的固件。字段：`hidden`（不显示的硬件编号）、`labels`（改名）、`xiaomiSources` / `xiaomiFallbackSources`（小米播放器的信号源编号，后者只在固件没有 `hdmiN_order` 时用）、`ignoresPictureBacklight`（有 `picture_backlight` 但不跟着变，亮度交给电视自己的滑块；`Brightness` 和 `MitvPanel` 都看它）。信号源按 TvInputInfo id 末尾的 `HWn` 编号。每条的 `note` 写明是哪台电视、哪个 issue 验证的。Lite 构建时复制 `DeviceProfile.kt` 和 `devices.json`。
+框架看不出来、只能按机型写的修正，以数据形式放在 `assets/devices.json`：按 `ro.product.model` 匹配，第一条命中的生效，`buildMajorBelow` 限定 `Build.DISPLAY` 第一个数字低于它的固件。字段：`hidden`（不显示的硬件编号）、`labels`（改名）、`xiaomiSources` / `xiaomiFallbackSources`（小米播放器的信号源编号，后者只在固件没有 `hdmiN_order` 时用）、`ignoresPictureBacklight`（有 `picture_backlight` 但不跟着变，亮度交给电视自己的滑块；`Brightness` 和 `MitvPanel` 都看它）。信号源按 TvInputInfo id 末尾的 `HWn` 编号。每条的 `note` 写明是哪台电视、哪个 issue 验证的。
 
 **这台电视自己的修正**（`system` prefs 里的 `device_profile`）整段替换内置的那一条，所以 Agent 在电视上试出来的 JSON 原样就是要加进 `devices.json` 的内容。电视上没有修改它的界面：1.59 有过控制中心里的「校正信号源」，用户在上面不知道该选哪个编号，户主决定去掉（2026-10-27），适配只走 Agent 和提交诊断，不改变日常使用。
 

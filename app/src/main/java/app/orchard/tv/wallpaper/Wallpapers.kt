@@ -103,6 +103,9 @@ object Wallpapers {
     private val bakedDir by lazy { File(app.filesDir, "backdrop").apply { mkdirs() } }
     private val thumbs = HashMap<String, Bitmap>()
 
+    /** Drops the decoded thumbnails; they are read again from disk the next time Personalize opens. */
+    fun clearMemoryCache() = synchronized(thumbs) { thumbs.clear() }
+
     var items by mutableStateOf<List<Wallpaper>>(emptyList()); private set
     var selectedId by mutableStateOf(LATEST_DAILY); private set
     /** The screensaver the owner chose; null while it follows the wallpaper ([screensaver]). */
@@ -442,9 +445,13 @@ object Wallpapers {
 
     /** The TV inputs Home lists that can play behind it, as (TvInputInfo id, name). */
     fun setSources(list: List<Pair<String, String>>) {
-        if (list == sources) return
-        sources = list
-        rebuildList()
+        if (list != sources) {
+            sources = list
+            rebuildList()
+        }
+        // The box has no inputs: a picture chosen from an older build falls back to the aerial films.
+        // Checked even when the list did not change, since it starts out empty.
+        if (list.isEmpty() && isSource()) select(LATEST_DAILY)
     }
 
     /**

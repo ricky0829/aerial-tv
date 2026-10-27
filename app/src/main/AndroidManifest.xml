@@ -17,6 +17,9 @@
     <!-- Installing a new version from Control Center (update/Updates.kt). On TVs without the
          "install unknown apps" page (TCL) tools/install.sh allows it over ADB. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Control Center's memory cleanup ends other apps' background processes. A normal permission,
+         granted at install; the system refuses it for apps that are in front. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- Some Android 5/6 TV firmwares deny even their app-specific external cache without these.
          Requested at runtime on Android 6 only when the update directory is not writable (#592). -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="23" />

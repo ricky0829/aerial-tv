@@ -227,7 +227,6 @@
         <button role="tab" aria-selected="false" data-tab="cli">一行命令</button>
         <button role="tab" aria-selected="false" data-tab="manual">手动</button>
         <button role="tab" aria-selected="false" data-tab="phone">只用手机</button>
-        <button role="tab" aria-selected="false" data-tab="lite">Android 4.x</button>
       </div>
 
       <div class="panel on" data-panel="agent">
@@ -263,13 +262,6 @@
           <li>在工具里安装 Aerial（standard 版；装不上时试 guard 版），再按 <a href="agent.md">安装说明</a> 的 Windows 第 3 步逐条授权、第 6 步启动 App。</li>
         </ol>
         <p class="note">这些工具是用户反馈装过的，本仓库没有逐一实测。手机工具一般不能替你完成全部设置，装好后建议再用电脑或 Agent 跑一遍验收。</p>
-      </div>
-
-      <div class="panel" data-panel="lite">
-        <p><b>Aerial Lite</b> 是给 <b>Android 4.0–4.4</b> 老电视、老盒子用的单独版本，外观和完整版一样。<b>现在是第一版（1.0），属于测试版</b>，只在虚拟机和新电视上测过，真实 4.x 电视上可能还有不少小问题。</p>
-        <p><b>不用单独操作</b>：「交给 Agent」和「一行命令」会先看电视的系统版本，4.x 装 Lite，5.0 及以上装完整版，不会装错。</p>
-        <p>没有电脑时：下载 <a href="download/aerial-lite.apk"><b>aerial-lite.apk</b></a> 拷进 U 盘，用电视的文件管理器打开安装（只装在 4.x 电视上）。装好后<b>按遥控器的主页键</b>，在系统问「使用哪个应用」时选 <b>Aerial Lite</b>，再选「<b>始终</b>」。</p>
-        <p class="note">Lite 没有桌面守护：固件把主页键锁死在自家桌面时，只能从应用列表打开 Lite。也没有航拍壁纸、信号源磁贴和应用内升级（升级就是再装一次）。还原：设置 → 应用 → Aerial Lite → 清除默认设置，或者卸载它。有问题请用<a href="https://github.com/pengchujin/aerial-tv/issues/new?template=device.yml&amp;title=%5BLite%5D%20">机型适配模板</a>反馈，标题写上 Lite。</p>
       </div>
 
       <p class="note">电视问是否允许调试时，选「始终允许」。TCL 会弹「多屏互动：正在发起应用推送」，选「同意」。</p>
@@ -343,7 +335,7 @@
       </details>
       <details>
         <summary>我的电视能用吗？</summary>
-        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.0–4.4 的老电视用 Aerial Lite（测试版，见安装区的「Android 4.x」），更老的不支持。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题见上面的<a href="#adapt">「装好了，但有地方不对？」</a>。</p>
+        <p>先看<a href="https://github.com/pengchujin/aerial-tv#支持的机型">机型列表</a>。不在列表里的大概率也可以，原生 Android TV / Google TV 最省事。LG webOS、三星 Tizen、华为鸿蒙智慧屏的系统不一样，装不了；Android 4.0–4.4 及更老的系统不支持。极米 H3、老乐视、荣耀智慧屏、老康佳（看不到版本号）等机型打不开 ADB，暂时没有办法。老电视或内存小的电视会自动用「流畅」效果，也可以在 个性化 → 效果 里手动选。遇到问题见上面的<a href="#adapt">「装好了，但有地方不对？」</a>。</p>
       </details>
     </div>
   </div>

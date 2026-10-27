@@ -69,7 +69,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.orchard.tv.CcPage
-import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.HomeViewModel
 import app.orchard.tv.Overlay
 import app.orchard.tv.R
@@ -213,9 +212,6 @@ fun HomeScreen(
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     val pillRequester = remember { FocusRequester() }
     val appContext = LocalContext.current
-    val firmwareInputPanel = remember {
-        SystemProbe.tclInputPanel(appContext) != null || SystemProbe.coocaaInputPanel(appContext)
-    }
 
     var focusedKey by remember { mutableStateOf<String?>(null) }
     // Where focus goes when the overlay closes, when that is not the tile it was on. Kept apart
@@ -420,13 +416,6 @@ fun HomeScreen(
                         vm.overlay = if (overlay is Overlay.ControlCenter) Overlay.None else Overlay.ControlCenter()
                         true
                     }
-                    NativeKeyEvent.KEYCODE_TV_INPUT -> {
-                        // TCL's firmware opens its own input panel on this key; answering it here
-                        // as well drew both panels at once (TCL MT5879, PR #334).
-                        if (firmwareInputPanel) return@onPreviewKeyEvent false
-                        vm.overlay = Overlay.ControlCenter(CcPage.Inputs)
-                        true
-                    }
                     else -> false
                 }
             },
@@ -543,7 +532,6 @@ fun HomeScreen(
             // nothing over it; the owner's videos there only once Home is still unless set to keep moving.
             val filmMoves = vm.resumed && overlay == Overlay.None && !vm.screensaverVisible && !pastShelf &&
                 focusedRow == 0 && moving == null
-            val sourceInput = Wallpapers.sourceInput
             when {
                 Wallpapers.selectedId == Wallpapers.LIVE -> LiveWallpaper(
                     moving = filmMoves,
@@ -563,7 +551,6 @@ fun HomeScreen(
                     lastInputAt = vm.lastInputAt,
                     cover = filmCover,
                 )
-                sourceInput != null -> SourceWallpaper(sourceInput, show = vm.resumed && !vm.screensaverVisible, cover = filmCover)
             }
             // Another wallpaper chosen: nothing shows through until the new one has a frame.
             LaunchedEffect(Wallpapers.selectedId) { filmCover.snapTo(0f) }
@@ -581,10 +568,9 @@ fun HomeScreen(
                 scroll = { scroll.value },
                 collapse = collapsePx,
                 cover = { filmCover.value },
-                // A film kept moving, or an input's picture, gets the shade a picture has, so the
-                // top row reads over it without the plate. In the grid both give way to the
-                // glass, as any wallpaper does (an input's picture cannot be blurred).
-                shadeMoving = Wallpapers.keepsMoving || sourceInput != null,
+                // A film kept moving gets the shade a picture has, so the top row reads over it
+                // without the plate. In the grid it gives way to the glass, as any wallpaper does.
+                shadeMoving = Wallpapers.keepsMoving,
                 filmStopped = { filmStopped },
                 toSaver = { toSaver.value },
                 filmGlass = (Wallpapers.filmFrost ?: Wallpapers.frosted).takeIf { Wallpapers.moves() && Wallpapers.backdrop != null },
@@ -862,26 +848,13 @@ fun HomeScreen(
             },
             onInfo = { closeMenu(); onAppInfo(it) },
             onUninstall = { closeMenu(); onUninstall(it) },
-            onUnpin = { key ->
-                closeMenu()
-                vm.entry(key)?.source?.let { vm.setSourcePinned(it, false) }
-            },
             onResetIcon = { key ->
                 closeMenu()
                 vm.resetIcon(key)
             },
             onBootTarget = { key ->
                 closeMenu()
-                val entry = vm.entry(key)
-                val source = entry?.source
-                when {
-                    source != null -> vm.chooseBootTarget(sourceId = source.id.takeIf { it != AerialSettings.bootSource })
-                    entry != null -> vm.chooseBootTarget(pkg = key.takeIf { it != AerialSettings.bootApp })
-                }
-            },
-            onSourceDevice = { id, device ->
-                closeMenu()
-                SourceLooks.chooseDevice(id, device)
+                if (vm.entry(key) != null) vm.chooseBootTarget(pkg = key.takeIf { it != AerialSettings.bootApp })
             },
             onToFolder = { key, id ->
                 val folderKey = vm.putInFolder(key, id)

@@ -19,6 +19,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Choreographer
 import android.view.KeyEvent
@@ -68,6 +69,7 @@ import app.orchard.tv.wallpaper.PhoneServer
 import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.system.DiagLog
 import app.orchard.tv.system.FrameStats
+import app.orchard.tv.system.Memory
 import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.ScreensaverMode
 import app.orchard.tv.system.SystemScreensaver
@@ -81,11 +83,13 @@ import app.orchard.tv.system.settingsLaunchIntent
 import app.orchard.tv.update.Updates
 import app.orchard.tv.weather.Weather
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
@@ -94,10 +98,6 @@ class MainActivity : ComponentActivity() {
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = vm.reload()
-    }
-
-    private val volumeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = vm.refreshVolume()
     }
 
     /** Midnight, or the clock set at boot: a new daily photo, and the next of the rotating ones. */
@@ -148,6 +148,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private var realStarted = false
+
+    /** Ends other apps' background processes a few seconds after Home is left for an app. */
+    private var trimJob: Job? = null
 
     /**
      * Where the firmware ships its own FallbackHome (not one of AOSP's), leaves the locked boot to
@@ -355,39 +358,31 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Opens the input or app the owner wants the TV to start on, if any. Both list with the apps,
-     * so wait for them a moment. Several routes may fire for one wake; the first wins.
+     * Opens the app the owner wants the TV to start on, if any. It lists with the apps, so wait
+     * for it a moment. Several routes may fire for one wake; the first wins.
      */
     private fun openBootSource(reason: String) {
-        val id = AerialSettings.bootSource
-        val pkg = AerialSettings.bootApp
-        if (id == null && pkg == null) return
+        val pkg = AerialSettings.bootApp ?: return
         if (SystemClock.elapsedRealtime() - bootSourceOpenedAt < 15_000) return
         bootSourceOpenedAt = SystemClock.elapsedRealtime()
         lifecycleScope.launch {
             // An app opens from its own entry at once: listing every app took 6.5 s at power-on on
             // Xiaomi MiTV-MFTR0 once Aerial came up earlier in the boot, all of it on PatchWall's
-            // heels. Inputs and Aerial's own tiles (AppCatalog.shortcuts) only Home lists.
-            val direct = pkg?.let { p ->
-                runCatching {
-                    val launch = packageManager.getLeanbackLaunchIntentForPackage(p) ?: packageManager.getLaunchIntentForPackage(p)
-                    launch?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                        ?.let { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() to it }
-                }.getOrNull()
-            }
-            // Inputs can take a while to list right after a wake (Xiaomi MiTV-MTEQ0, issue #111).
+            // heels. Aerial's own tiles (AppCatalog.shortcuts) only Home lists.
+            val direct = runCatching {
+                val launch = packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: packageManager.getLaunchIntentForPackage(pkg)
+                launch?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    ?.let { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() to it }
+            }.getOrNull()
             val intent = direct ?: withTimeoutOrNull(30_000) {
-                snapshotFlow {
-                    if (id != null) vm.sources.firstOrNull { it.id == id }?.let { it.label to it.intent }
-                    else vm.entry(pkg!!)?.let { it.label to it.launchIntent() }
-                }.filterNotNull().first()
+                snapshotFlow { vm.entry(pkg)?.let { it.label to it.launchIntent() } }.filterNotNull().first()
             } ?: run {
-                android.util.Log.w("Aerial", "$reason: ${id ?: pkg} not listed; not opening it")
+                android.util.Log.w("Aerial", "$reason: $pkg not listed; not opening it")
                 return@launch
             }
             // A live TV app opened before the network is up shows an error and stays on it: a box
-            // that boots fast had no network yet (issue #553). Inputs need none.
-            if (id == null && SystemProbe.network(this@MainActivity).kind == NetKind.Offline) {
+            // that boots fast had no network yet (issue #553).
+            if (SystemProbe.network(this@MainActivity).kind == NetKind.Offline) {
                 withTimeoutOrNull(BOOT_APP_NETWORK_WAIT_MS) {
                     while (SystemProbe.network(this@MainActivity).kind == NetKind.Offline) delay(500)
                 }
@@ -467,6 +462,31 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         DiagLog.i("window focus $hasFocus")
+        // Another window took the screen (an app, the installer, the TV's settings). On this box
+        // that can leave Aerial merely unfocused rather than paused, so the trim hangs on the
+        // focus, not on onPause.
+        if (hasFocus) trimJob?.cancel() else scheduleTrim()
+    }
+
+    /**
+     * The box shows one app at a time: once the app in front has come up, the rest's background
+     * processes are ended, and the RAM they held is the app's. Home's own process stays, so
+     * pressing Home still comes back at once. Not while the screensaver runs or the screen is off;
+     * coming back into focus cancels it.
+     */
+    private fun scheduleTrim() {
+        if (!AerialSettings.trimBackground) return
+        trimJob?.cancel()
+        trimJob = lifecycleScope.launch {
+            delay(5_000)
+            // Not during the first frames of a boot, before Home has shown anything.
+            if (!vm.loaded) return@launch
+            if (!AerialSettings.trimBackground) return@launch
+            if (vm.screensaverVisible) return@launch
+            if (getSystemService<PowerManager>()?.isInteractive != true) return@launch
+            if (vm.resumed && hasWindowFocus()) return@launch
+            withContext(Dispatchers.IO) { Memory.trimBackground(this@MainActivity) }
+        }
     }
 
     override fun dump(prefix: String, fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
@@ -684,11 +704,6 @@ class MainActivity : ComponentActivity() {
             ContextCompat.RECEIVER_EXPORTED,
         )
         ContextCompat.registerReceiver(
-            this, volumeReceiver,
-            IntentFilter("android.media.VOLUME_CHANGED_ACTION"),
-            ContextCompat.RECEIVER_EXPORTED,
-        )
-        ContextCompat.registerReceiver(
             this, dayReceiver,
             IntentFilter().apply {
                 addAction(Intent.ACTION_DATE_CHANGED)
@@ -718,6 +733,8 @@ class MainActivity : ComponentActivity() {
     /** What onResume does once the user is unlocked; also run by a start that was locked before. */
     private fun resumeWork() {
         vm.resumed = true
+        // Back before the app had time to start: its background neighbours are left alone.
+        trimJob?.cancel()
         DiagLog.i("onResume; screensaver after ${idleBeforeScreensaver() / 1000} s")
         if (SystemClock.uptimeMillis() - dreamAskedAt < 1_000) idleHandler.postDelayed(dreamCheck, 1_500)
         restartIdleTimer()
@@ -750,7 +767,6 @@ class MainActivity : ComponentActivity() {
         if (locked) return
         DiagLog.i("onStop")
         unregisterReceiver(packageReceiver)
-        unregisterReceiver(volumeReceiver)
         unregisterReceiver(dayReceiver)
         runCatching { getSystemService<ConnectivityManager>()?.unregisterNetworkCallback(networkCallback) }
     }

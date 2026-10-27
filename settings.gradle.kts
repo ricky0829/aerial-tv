@@ -14,4 +14,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Aerial"
 include(":app")
-include(":lite")

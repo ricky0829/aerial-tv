@@ -28,20 +28,20 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Whether a newer release is out (issues #24, #76). Most owners stay on the version they installed
- * and report bugs fixed long ago. At most once a day Aerial reads the latest release's tag from the
- * website (reachable in China, unlike GitHub); Control Center then names the new version and says
- * how to update. Nothing is downloaded or installed in the background: only when the owner picks
- * "Download and Install" does Aerial fetch the new APK and hand it to the system installer
- * ([install]).
+ * Whether a newer build of this fork is out. At most once a day Aerial reads the latest release's
+ * tag from this project's GitHub releases (ricky0829/aerial-tv), not the upstream project's
+ * website; Control Center then names the new version and says how to update. Nothing is
+ * downloaded or installed in the background: only when the owner picks "Download and Install"
+ * does Aerial fetch the new APK and hand it to the system installer ([install]).
  *
  * Every three hours, not once a day: several releases can come out in one day, and a TV that had
- * checked in the morning kept offering nothing until the next day (1.22 to 1.25 on 2026-10-22).
+ * checked in the morning kept offering nothing until the next day.
  */
 object Updates {
     private const val TAG = "AerialUpdates"
     private const val PREFS = "updates"
-    private const val VERSION_URL = "https://aerial.qust.me/download/version.txt"
+    private const val LATEST_URL = "https://api.github.com/repos/ricky0829/aerial-tv/releases/latest"
+    private const val DOWNLOAD_URL = "https://github.com/ricky0829/aerial-tv/releases/latest/download"
     private const val CHECK_EVERY_MS = 3 * 60 * 60 * 1000L
     private const val RETRY_MS = 10 * 60 * 1000L
 
@@ -90,10 +90,13 @@ object Updates {
         lastAttempt = now
         scope.launch {
             val latest = withContext(Dispatchers.IO) {
-                runCatching { read(VERSION_URL).trim().removePrefix("v") }
+                runCatching {
+                    // The releases' tag carries this fork's name: "dangbei-1.60.1", "v1.60".
+                    val tag = org.json.JSONObject(read(LATEST_URL)).optString("tag_name")
+                    Regex("\\d+(\\.\\d+)*").findAll(tag).lastOrNull()?.value
+                }
                     .onFailure { Log.w(TAG, "could not check for a new version", it) }
                     .getOrNull()
-                    ?.takeIf { it.matches(Regex("\\d+(\\.\\d+)*")) }
             } ?: return@launch
             prefs.edit { putString("latest", latest); putLong("checked_at", System.currentTimeMillis()) }
             available = latest.takeIf { newer(it, current) }
@@ -137,7 +140,7 @@ object Updates {
     }
 
     enum class Failure {
-        /** Neither the website nor GitHub gave a complete APK. */
+        /** GitHub did not give a complete APK. */
         Download,
         /** The TV lets no app hand an APK to its installer, or has no installer to hand it to. */
         Blocked,
@@ -228,7 +231,7 @@ object Updates {
      */
     @Volatile var testApk: File? = null
 
-    /** The website first (reachable in China), then GitHub. Returns the APK's info once it parses. */
+    /** This fork's release asset, then the same file through GitHub's latest-release alias. */
     private suspend fun downloadFrom(context: Context, file: File): PackageInfo? {
         testApk?.takeIf { it.isFile }?.let { test ->
             file.parentFile?.mkdirs()
@@ -236,11 +239,8 @@ object Updates {
             if (Build.VERSION.SDK_INT < 24) file.setReadable(true, false)
             return verify(context, file)
         }
-        val name = "aerial-${BuildConfig.FLAVOR}.apk"
-        val sources = listOf(
-            "https://aerial.qust.me/download/$name",
-            "https://github.com/pengchujin/aerial-tv/releases/latest/download/$name",
-        )
+        val name = "aerial-${BuildConfig.FLAVOR}-dangbei.apk"
+        val sources = listOf("$DOWNLOAD_URL/$name")
         for (url in sources) {
             val ok = runCatching { download(url, file) }
                 .onFailure { Log.w(TAG, "could not download $url", it) }
