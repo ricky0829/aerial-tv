@@ -17,8 +17,8 @@
 
 1. 本分支发布的 APK 与原版签名不同，无法覆盖安装，若已经安装原版，必须先卸载（相关指令已包含在 agent 提示词中，无需手动卸载）。
 2. **本分支修复了原项目闪现系统桌面、接管缓慢、黑屏、弹出最近任务等问题。** 当贝盒子硬编码了桌面白名单，非白名单包名均无法接管主页键。本分支解决了此问题。
-3. **从应用按主页键一律回到首页。** 原项目的逻辑为按下主页键，回到上次主页停留的那一页，需要再按一次主页才回到首页。本分支直接回到首页。若不喜欢此改动，可参考手动构建章节，告诉 agent 不要合入此补丁。
-4. 本分支的补丁只兼容当贝盒子，即 `ro.product.brand` 为 `Dangbei` 。
+3. **从应用按主页键一律回到首页。** 原项目的逻辑为按下主页键，回到上次主页停留的那一页，需要再按一次主页才回到首页。本分支直接回到首页。若不喜欢此改动，可参考手动构建章节，并告诉 agent 跳过其中的第三步（MainActivity 的改动）。
+4. 本分支的补丁只兼容当贝盒子，即 `ro.product.brand` 为 `Dangbei`。
 
 ## 使用说明
 
@@ -43,8 +43,8 @@
 **手动 ADB 安装**：
 
 注意事项：
-1. 从 Release 下载最新 aerial-standard-dangbei.apk
-2. 原来的值是 `null` 或空时，只写 `app.orchard.tv/app.orchard.tv.guard.HomeGuardService`
+1. 从 [Release](https://github.com/ricky0829/aerial-tv/releases/latest) 下载最新的 `aerial-standard-dangbei.apk`
+2. 原来的值是 `null` 或空时，只写 `app.orchard.tv/app.orchard.tv.guard.HomeGuardService`；原来的值里已经有这一项时不要重复添加
 3. 部分命令报错可忽略，安装完成后按下主页键可以回到 Aerial 且无闪屏、黑屏即可
 
 ```powershell
@@ -78,7 +78,7 @@ adb shell settings put secure accessibility_enabled 1
 
 ## 还原
 
-参考 [原项目](https://github.com/pengchujin/aerial-tv) 说明。
+参考[原项目的安装 / 还原说明](https://aerial.qust.me/agent.md)，其中的「还原」一节有逐步卸载的命令。
 
 
 ## 手动构建
@@ -122,14 +122,14 @@ if (dangbei && event.keyCode == KeyEvent.KEYCODE_HOME) {
 2) 删掉字段 openedAppSinceHome 以及它的全部赋值（openBootSource、resumeWork、launch 三处）和只为它服务的判断。
 
 四、编译、装机、验收
-1. 装之前记录当前版本，安装用 adb install -r；装不上时再按 README 的安装步骤处理。
+1. 装之前记录当前版本。构建出的包通常和已装版本的签名不同，`adb install -r` 会报签名不一致，此时按 README 的安装步骤先卸载再装（会清空 Aerial 内的壁纸、布局等设置）。
 2. 必须用实体遥控器验收（adb shell input keyevent 是注入按键，不经过无障碍过滤，测不出来）：
    - 按主页键回到 Aerial，不黑屏、不闪系统桌面
    - 长按主页键不弹最近任务
    - 在抽屉里打开应用，按一次主页键直接回首页第一个图标
 3. adb shell "dumpsys activity exit-info app.orchard.tv" 里，装机后不应再出现新的 USER REQUESTED 记录。
 
-补充：只有两处改动，位置固定在 `updateKeyFilter()`、`onKeyEvent()` 和 `onNewIntent()`。上游如果重构了这几个函数，按语义移植即可：当贝上 HOME 一律吃掉（长按同理），第一次按下拉起 Aerial；按键过滤在当贝上不受 `isDefaultHome()` 影响，只在息屏时不拦截。
+补充：改动只有两处，代码位置固定在 `updateKeyFilter()`、`onKeyEvent()` 和 `onNewIntent()`。上游如果重构了这几个函数，按语义移植即可：当贝上 HOME 一律吃掉（长按同理），第一次按下拉起 Aerial；按键过滤在当贝上不受 `isDefaultHome()` 影响，只在息屏时不拦截。
 ```
 
 
