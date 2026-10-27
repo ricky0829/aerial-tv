@@ -392,7 +392,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
             android.util.Log.i("Aerial", "$reason: opening ${intent.first}, what the TV starts on")
-            openedAppSinceHome = true
             open(intent.second)
         }
     }
@@ -543,9 +542,6 @@ class MainActivity : ComponentActivity() {
     private var wakeQuietUntil = 0L
     private var swallowTouch = false
 
-    /** An app (or the stock launcher) was opened from the grid and Home has not been pressed since. */
-    private var openedAppSinceHome = false
-
     private fun restartIdleTimer() {
         vm.lastInputAt = SystemClock.uptimeMillis()
         idleHandler.removeCallbacks(showScreensaver)
@@ -650,8 +646,9 @@ class MainActivity : ComponentActivity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.action == Intent.ACTION_MAIN) {
             // Since 1.11 Home Guard answers Home from an app by bringing Aerial back with this same
             // intent, so the intent alone cannot tell Home-on-Home from coming back from an app.
-            vm.onHomePressed(resetFocus = !openedAppSinceHome)
-            openedAppSinceHome = false
+            // This fork sends either one to the first page: coming back from an app no longer
+            // lands on the page it was opened from, and a second Home is never needed.
+            vm.onHomePressed()
         }
     }
 
@@ -724,8 +721,7 @@ class MainActivity : ComponentActivity() {
         Updates.onHomeResumed()
         vm.refreshSystem()
         // Back in front by any route (Home was handled in onNewIntent, which runs first; Back from
-        // the app lands here directly), so the next Home press is a Home-on-Home again.
-        openedAppSinceHome = false
+        // the app lands here directly).
         LaunchFallback.next()?.let {
             DiagLog.i("the page just opened closed at once; opening ${it.component ?: it.action}")
             open(it)
@@ -761,7 +757,6 @@ class MainActivity : ComponentActivity() {
             vm.whenUnlocked { launch(app, bounds) }
             return
         }
-        openedAppSinceHome = true
         // The stock launcher (Xiaomi's PatchWall, with the maker's own iQIYI / Mango content) opens
         // through the system Home action where it can; see HomeGuardService.openStockLauncher.
         if (HomeGuardService.isStockHome(app.packageName) &&
