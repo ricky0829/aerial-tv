@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
-/** How long Home sits still before the aerial wallpaper starts moving. */
+/** How long Home sits still before the owner's videos start moving, unless set to keep moving. */
 internal const val START_AFTER_MS = 10_000L
 
 /** A stopped film keeps its player this long, so it moves on again without loading. */
@@ -97,8 +97,8 @@ class LiveFilm {
 }
 
 /**
- * The aerial wallpaper (issue #216): once Home has sat still on the top row for [START_AFTER_MS],
- * Apple's film plays behind the tiles, and any key stops it on the frame it was showing. That frame
+ * The aerial wallpaper (issue #216): Apple's film plays behind the tiles while Home is on the top
+ * row, keys and all; going down to the apps stops it on the frame it was showing. That frame
  * becomes the wallpaper's picture (Wallpapers.useLiveFrame), so the glass plate, the grid's frosted
  * background and the next start all match what was on screen. The film starts again from that
  * frame (Wallpapers.liveSpot), even after its player has gone, so still and moving are one shot.
@@ -113,7 +113,6 @@ fun LiveWallpaper(
     moving: Boolean,
     /** False once the screensaver is up or Home is behind an app: the player's decoder goes at once. */
     keep: Boolean,
-    lastInputAt: Long,
     cover: Animatable<Float, *>,
     /** The screensaver carries the film on: it keeps moving whatever the keys do. */
     hold: Boolean,
@@ -126,16 +125,10 @@ fun LiveWallpaper(
     var surface by remember { mutableStateOf<SurfaceView?>(null) }
     // Frames are reaching the screen: the first one has been drawn and the film is not stopped.
     var showing by remember { mutableStateOf(false) }
-    var idle by remember { mutableStateOf(false) }
     val reader = remember { FrameReader(context) }
-    LaunchedEffect(lastInputAt, moving) {
-        idle = false
-        if (!moving) return@LaunchedEffect
-        delay(START_AFTER_MS)
-        idle = true
-    }
-    // Set to keep moving, it plays as soon as Home shows it and keys do not stop it (issue #360).
-    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
+    // Plays as soon as Home shows it, and keys do not stop it (Wallpapers.keepsMoving).
+    val play = moving || hold
+    val inSaver by rememberUpdatedState(hold && !moving)
     val keepNow by rememberUpdatedState(keep)
     val standInNow by rememberUpdatedState(standIn)
 
@@ -201,10 +194,14 @@ fun LiveWallpaper(
         val id = live.film?.id ?: return@LaunchedEffect
         if (!play || !showing) return@LaunchedEffect
         if (pixelCopy == false && glassFrames) reader.open(id)
-        sampleGlass({ player }) { at ->
+        // Under the screensaver no plate shows: a frame only so the glass is at hand where it stops.
+        sampleGlass({ player }, every = { if (inSaver) SAVER_GLASS_EVERY_MS else GLASS_EVERY_MS }) { at ->
             val frame = surface?.let { copyGlass(it) }
                 ?: if (pixelCopy == true) null else reader.frame(id, at, 320, 180, exact = false, quiet = true)
-            frame?.also { glassSample = GlassSample(id, at, it) }
+            frame?.also {
+                glassSample = GlassSample(id, at, it)
+                Wallpapers.keepClipGlass(id, it) { live.film?.id }
+            }
         }
     }
 
@@ -241,7 +238,10 @@ fun LiveWallpaper(
                 val h = surface?.height ?: Wallpapers.screenH
                 p.videoDecoderCounters?.let { DiagLog.i("wallpaper film dropped ${it.droppedBufferCount} of ${it.renderedOutputBufferCount + it.droppedBufferCount} frames") }
                 val before = Wallpapers.frosted
-                glassSample?.takeIf { it.film == film && abs(it.atMs - at) <= GLASS_EVERY_MS * 2 }?.let {
+                // Any frame of the same shot will do: an aerial moves slowly, and frosted, seconds
+                // apart look alike, while the glass of another shot showed in the grid until this
+                // one was decoded, 0.5-3 s (Xiaomi MiTV-MFTR0, issue #727).
+                glassSample?.takeIf { it.film == film && abs(it.atMs - at) <= SAME_SHOT_MS }?.let {
                     Wallpapers.useLiveFrost(it.frame)
                     glassReady(live)
                 }
@@ -362,8 +362,22 @@ private const val COPY_SLOW_MS = 150L
 /** Whether PixelCopy read the film in this process; null until it has been tried. */
 private var pixelCopy: Boolean? = null
 
-/** How often a small frame is taken for the glass while the film moves. */
-internal const val GLASS_EVERY_MS = 2_500L
+/**
+ * How often a small frame is taken for the glass while the film moves on Home. Each is a key frame
+ * decoded from the film's file on Xiaomi MiTV-MFTR0, 0.4-0.6 s of a core: every 2.5 s (until
+ * issue #727) was more than the soft glass needs.
+ */
+internal const val GLASS_EVERY_MS = 4_000L
+
+/** The same under the screensaver, where only the glass for wherever it stops is wanted. */
+private const val SAVER_GLASS_EVERY_MS = 10_000L
+
+/**
+ * How far from where the film stopped a frame of it still makes its glass: past one taken under the
+ * screensaver, while the next is being decoded, which can take seconds there (Xiaomi MiTV-MFTR0:
+ * the last one 14.5 s back, the next not done; the glass then took 6 s more).
+ */
+private const val SAME_SHOT_MS = 30_000L
 
 /**
  * Whether frames are taken for the glass while a film moves. Not on a TV set to Lite effects, and
@@ -382,13 +396,23 @@ private var glassCostly = false
  * ([glassFrames]), the plate keeps a still glass of the frame the film started from, blurred down
  * to its broad colours so that what has moved on does not show twice through it.
  */
-internal suspend fun sampleGlass(player: () -> ExoPlayer?, canTake: () -> Boolean = { true }, take: suspend (atMs: Long) -> Bitmap?) {
+internal suspend fun sampleGlass(
+    player: () -> ExoPlayer?,
+    canTake: () -> Boolean = { true },
+    every: () -> Long = { GLASS_EVERY_MS },
+    take: suspend (atMs: Long) -> Bitmap?,
+) {
     // The first soon, for a film stopped moments after it moved.
     var wait = 800L
     var costly = 0
     while (glassFrames && canTake()) {
-        delay(wait)
-        wait = GLASS_EVERY_MS
+        // In steps, so a shorter [every] (out of the screensaver) is kept to at once.
+        var waited = 0L
+        while (waited < minOf(wait, every())) {
+            delay(250)
+            waited += 250
+        }
+        wait = Long.MAX_VALUE
         val p = player() ?: return
         val before = droppedFrames(p)
         val frame = take(p.currentPosition)

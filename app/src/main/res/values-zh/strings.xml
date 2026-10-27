@@ -85,7 +85,7 @@
     <string name="wx_snow">雪</string>
     <string name="wx_thunder">雷雨</string>
     <string name="wp_daily_latest">每日一图</string>
-    <string name="wp_live">动态航拍。在主屏幕第一行停 10 秒后开始播放，按任意键停在当前画面并留作壁纸，下次从这一帧接着播。</string>
+    <string name="wp_live">动态航拍。在主屏幕第一行时一直播放，进入下面的 App 时停在当前画面并留作壁纸，下次从这一帧接着播。</string>
     <string name="wp_photos_rotate">我的照片 · 每天换</string>
     <string name="wp_daily_note">必应每日一图，每天自动换成当天的。</string>
     <string name="wp_photos_rotate_note">从你的照片里每天换一张。</string>
@@ -112,7 +112,7 @@
     <string name="ss_back_off">不响应</string>
     <string name="ss_back_choice_hint">在主页第一行按返回键时做什么。容易误按的话可以关掉，屏保仍会按时自动开始。</string>
     <string name="ss_quality">航拍画质</string>
-    <string name="ss_quality_hint">「自动」播放这台电视能显示的最好版本：4K 杜比视界、4K 或 1080p。4K 杜比视界需要约 25 Mbps 的网速，航拍经常跳过时可以选 1080p。</string>
+    <string name="ss_quality_hint">「自动」播放这台电视能显示的最好版本：4K 杜比视界、4K 或 1080p。壁纸是航拍时，屏保沿用壁纸的画质接着播，不会黑屏；选了「4K 杜比视界」则屏保切到杜比视界，切换时电视可能黑一下。4K 杜比视界需要约 25 Mbps 的网速，航拍经常跳过时可以选 1080p。</string>
     <string name="ss_quality_auto">自动</string>
     <string name="ss_quality_hd">1080p</string>
     <string name="ss_quality_uhd">4K</string>
@@ -189,6 +189,7 @@
     <string name="cc_update_downloading">正在下载… %d%%</string>
     <string name="cc_update_opened">已打开安装程序，按提示确认更新（小米上是「继续更新」）。装好后按「完成」，会回到 Aerial，设置都保留。</string>
     <string name="cc_update_permission">请在刚打开的设置里允许 Aerial 安装应用，然后回来再点一次「下载并安装」。</string>
+    <string name="cc_update_storage_permission">这台电视需要存储权限才能保存更新。请允许弹出的文件权限请求，再点一次「下载并安装」。</string>
     <string name="cc_update_failed_download">下载没有成功（官网和 GitHub 都试过了）。检查网络后再试，或者用下面的命令升级。</string>
     <string name="cc_update_failed_blocked">这台电视不让 App 安装别的 App，请用下面的命令升级。</string>
     <string name="cc_update_failed_signature">这台电视上的 Aerial 和官方版本签名不同，不能直接覆盖。</string>

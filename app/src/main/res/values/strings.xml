@@ -86,7 +86,7 @@
     <string name="wx_snow">Snow</string>
     <string name="wx_thunder">Thunderstorm</string>
     <string name="wp_daily_latest">Daily Photo</string>
-    <string name="wp_live">Moving aerial films. They start after 10 seconds still on the top row of Home and stop on the frame showing at any key, which stays as the picture; the next film picks up from there.</string>
+    <string name="wp_live">Moving aerial films. They play while Home is on the top row and stop on the frame showing when you go down to the apps, which stays as the picture; the next film picks up from there.</string>
     <string name="wp_photos_rotate">My Photos, Daily</string>
     <string name="wp_daily_note">Bing\'s photo of the day, changing to the new one every day.</string>
     <string name="wp_photos_rotate_note">A different one of your photos each day.</string>
@@ -113,7 +113,7 @@
     <string name="ss_back_off">Does Nothing</string>
     <string name="ss_back_choice_hint">What Back does on the top row of Home. Turn it off if it gets pressed by accident; the screensaver still starts on its own.</string>
     <string name="ss_quality">Aerial Quality</string>
-    <string name="ss_quality_hint">Auto plays the best this TV can show: 4K Dolby Vision, 4K or 1080p. 4K Dolby Vision needs about 25 Mbps; choose 1080p if films often skip.</string>
+    <string name="ss_quality_hint">Auto plays the best this TV can show: 4K Dolby Vision, 4K or 1080p. Over the aerial wallpaper the screensaver goes on in the wallpaper\'s format, without a blink; with 4K Dolby Vision chosen it switches to Dolby Vision, and the TV may go black for a moment. 4K Dolby Vision needs about 25 Mbps; choose 1080p if films often skip.</string>
     <string name="ss_quality_auto">Auto</string>
     <string name="ss_quality_hd">1080p</string>
     <string name="ss_quality_uhd">4K</string>
@@ -190,6 +190,7 @@
     <string name="cc_update_downloading">Downloading… %d%%</string>
     <string name="cc_update_opened">The installer is open: confirm the update there. When it is done, choose Done to come back to Aerial, with every setting kept.</string>
     <string name="cc_update_permission">Allow Aerial to install apps in the settings that just opened, then come back and choose Download and Install again.</string>
+    <string name="cc_update_storage_permission">This TV needs storage access to save the update. Allow the file permission request, then choose Download and Install again.</string>
     <string name="cc_update_failed_download">The download did not finish (both the website and GitHub were tried). Check the network and try again, or update with the command below.</string>
     <string name="cc_update_failed_blocked">This TV does not let apps install other apps. Update with the command below.</string>
     <string name="cc_update_failed_signature">The Aerial on this TV is signed differently from the official one, so it cannot be updated over.</string>

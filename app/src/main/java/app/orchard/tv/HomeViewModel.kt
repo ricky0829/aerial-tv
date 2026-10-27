@@ -415,7 +415,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val level = withContext(Dispatchers.Default) { Brightness.level(ctx) }
             network = n; volume = v
             // TvSource holds an Intent, which has no value equality; compare what a tile shows.
-            fun shown(list: List<TvSource>) = list.map { Triple(it.id, it.label, it.deviceName) }
+            // The route too: a corrected Xiaomi source id changes nothing a tile shows.
+            fun shown(list: List<TvSource>) = list.map { listOf(it.id, it.label, it.deviceName, it.intent.toUri(0)) }
             if (shown(s) != shown(sources)) { sources = s; arrange() } else sources = s
             homeStatus = SystemProbe.homeStatus(ctx)
             brightness = level

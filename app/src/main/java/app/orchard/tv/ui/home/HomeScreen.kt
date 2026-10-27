@@ -49,8 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -77,6 +77,7 @@ import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.apps.AppEntry
 import app.orchard.tv.ui.control.ControlCenter
 import app.orchard.tv.ui.wallpaper.WallpaperSheet
+import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.ScreensaverMode
 import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.ui.components.liquidGlass
@@ -242,6 +243,7 @@ fun HomeScreen(
     var filmFailed by remember(vm.screensaverVisible) { mutableStateOf(false) }
     val filmSaverChosen = remember(vm.screensaverVisible) {
         vm.screensaverVisible && Wallpapers.selectedId == Wallpapers.LIVE && Wallpapers.screensaver == ScreensaverMode.Aerial &&
+            AerialFormats.screensaverCarriesWallpaper(appContext) &&
             (filmCover.value > 0.5f || focusedRow == 0 && overlay == Overlay.None && moving == null)
     }
     val filmSaver = filmSaverChosen && !filmFailed
@@ -538,7 +540,7 @@ fun HomeScreen(
                 )
             }
             // A moving wallpaper's film, under everything; it moves only on the top row with
-            // nothing over it, and there only once Home is still unless set to keep moving.
+            // nothing over it; the owner's videos there only once Home is still unless set to keep moving.
             val filmMoves = vm.resumed && overlay == Overlay.None && !vm.screensaverVisible && !pastShelf &&
                 focusedRow == 0 && moving == null
             val sourceInput = Wallpapers.sourceInput
@@ -546,7 +548,6 @@ fun HomeScreen(
                 Wallpapers.selectedId == Wallpapers.LIVE -> LiveWallpaper(
                     moving = filmMoves,
                     keep = vm.resumed && (!vm.screensaverVisible || filmSaver),
-                    lastInputAt = vm.lastInputAt,
                     cover = filmCover,
                     hold = filmSaver && vm.resumed,
                     // Control Center and Personalize leave Home sharp (dimmed, or above the sheet):
@@ -566,6 +567,12 @@ fun HomeScreen(
             }
             // Another wallpaper chosen: nothing shows through until the new one has a frame.
             LaunchedEffect(Wallpapers.selectedId) { filmCover.snapTo(0f) }
+            // The aerial film's own glass for the grid: the one playing or stopped, else the one
+            // the picture was taken from.
+            val pictureClip = remember(Wallpapers.backdrop) { Wallpapers.liveSpot()?.first }
+            val clip = if (Wallpapers.selectedId == Wallpapers.LIVE) liveFilm.film?.id ?: pictureClip else null
+            LaunchedEffect(clip) { Wallpapers.showClipGlass(clip) }
+            val clipGlass = Wallpapers.clipGlass?.takeIf { it.first == clip }?.second
             HomeBackground(
                 // The chosen wallpaper; in "Follow App" mode, light from the focused app.
                 backdrop = Wallpapers.backdrop ?: ambientApp?.art?.backdrop,
@@ -576,8 +583,8 @@ fun HomeScreen(
                 cover = { filmCover.value },
                 // A film kept moving, or an input's picture, gets the shade a picture has, so the
                 // top row reads over it without the plate. In the grid both give way to the
-                // frosted picture, as any wallpaper does (an input's picture cannot be blurred).
-                shadeMoving = AerialSettings.wallpaperAlwaysMoves || sourceInput != null,
+                // glass, as any wallpaper does (an input's picture cannot be blurred).
+                shadeMoving = Wallpapers.keepsMoving || sourceInput != null,
                 filmStopped = { filmStopped },
                 toSaver = { toSaver.value },
                 filmGlass = (Wallpapers.filmFrost ?: Wallpapers.frosted).takeIf { Wallpapers.moves() && Wallpapers.backdrop != null },
@@ -585,6 +592,9 @@ fun HomeScreen(
                 saverReveal = { saverReveal.value },
                 saverPush = { saverPush.value },
                 lift = { lift },
+                wallpaper = Wallpapers.selectedId,
+                glassAwaitsStop = Wallpapers.selectedId == Wallpapers.LIVE && clipGlass == null,
+                gridGlass = clipGlass,
             )
 
             // Before Android 7 there is no picture of Home under Control Center (issue #466), so the
@@ -613,7 +623,12 @@ fun HomeScreen(
                             .align(if (clockRight) Alignment.TopEnd else Alignment.TopStart)
                             .padding(horizontal = metrics.margin)
                             .padding(top = metrics.clockY)
-                            .graphicsLayer { alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f) },
+                            // No offscreen buffer while it fades: it would be the clock's capBox, and the
+                            // Chinese, the icon and the shadows above and below it were cut off (#727).
+                            .graphicsLayer {
+                                alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f)
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
+                            },
                         toSaver = { clockToSaver.value },
                         saving = vm.screensaverVisible,
                         away = carrying,
@@ -623,7 +638,10 @@ fun HomeScreen(
                         now = now,
                         modifier = Modifier
                             .padding(start = metrics.margin, top = 28.dp)
-                            .graphicsLayer { alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f) },
+                            .graphicsLayer {
+                                alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f)
+                                compositingStrategy = CompositingStrategy.ModulateAlpha
+                            },
                         toSaver = { toSaver.value },
                         saving = vm.screensaverVisible,
                     )
@@ -713,16 +731,6 @@ fun HomeScreen(
         homeShot?.let { shot -> Canvas(Modifier.fillMaxSize()) { drawImage(shot) } }
         PanelBackdrop(Wallpapers.frosted.takeIf { Wallpapers.backdrop != null }, { backdropFrost }, { backdropVeil })
 
-        // Rows that scroll up under the status pill fade out instead of colliding with it.
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .graphicsLayer { alpha = (scroll.value / collapsePx).coerceIn(0f, 1f) },
-        ) {
-            drawRect(Brush.verticalGradient(0f to Color.Black, 0.5f to Color.Black.copy(alpha = 0.82f), 1f to Color.Transparent))
-        }
-
         // The pill holds only the network and Control Center. The time joins it once the clock
         // above the top row has scrolled away, so the screen never shows the time twice. The small
         // clock on the right puts the time and weather just left of the pill.
@@ -738,7 +746,10 @@ fun HomeScreen(
                     now = now,
                     modifier = Modifier
                         .padding(end = 14.dp)
-                        .graphicsLayer { alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f) },
+                        .graphicsLayer {
+                            alpha = 1f - (scroll.value / collapsePx * 1.6f).coerceIn(0f, 1f)
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
+                        },
                     toSaver = { toSaver.value },
                     saving = vm.screensaverVisible,
                 )
@@ -749,11 +760,18 @@ fun HomeScreen(
                 showTime = if (dragged) pastShelf else inGrid,
                 enabled = gridEnabled && moving == null,
                 focusRequester = pillRequester,
-                modifier = Modifier.graphicsLayer {
-                    alpha = 1f - (toSaver.value * 2f).coerceIn(0f, 1f)
-                    // No offscreen buffer: it would cut the focused pill's 8% growth to a box.
-                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                },
+                modifier = Modifier
+                    // Down goes back to the top-row tile Up came from, not to the nearest one,
+                    // which under the pill is the last of the row (issue #703).
+                    .focusProperties {
+                        val key = focusedKey
+                        if (key != null && apps.indexOfFirst { it.key == key } in 0 until COLUMNS) down = requester(key)
+                    }
+                    .graphicsLayer {
+                        alpha = 1f - (toSaver.value * 2f).coerceIn(0f, 1f)
+                        // No offscreen buffer: it would cut the focused pill's 8% growth to a box.
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    },
                 onFocused = { gained ->
                     // The window hands its first focus to the top-most control; the top row is where Home starts.
                     if (gained) {
